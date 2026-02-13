@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "retreaver-mcp"
+version = "0.1.0"
+description = "MCP servers for the Retreaver call tracking API"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]",
+    "httpx",
+    "python-dotenv",
+]
+
+[project.scripts]
+retreaver-read = "retreaver_mcp.read_server:main"
+retreaver-write = "retreaver_mcp.write_server:main"
