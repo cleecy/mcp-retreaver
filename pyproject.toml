@@ -11,8 +11,19 @@ dependencies = [
     "mcp[cli]",
     "httpx",
     "python-dotenv",
+    "anthropic",
+    "websockets",
+    "openai",
+    "google-genai",
+    "python-telegram-bot",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/retreaver_mcp_servers", "src/retreaver_host", "src/retreaver_telegram"]
+
 [project.scripts]
-retreaver-read = "retreaver_mcp.read_server:main"
-retreaver-write = "retreaver_mcp.write_server:main"
+retreaver = "retreaver_mcp_servers.launcher:main"
+retreaver-read = "retreaver_mcp_servers.read_server:main"
+retreaver-write = "retreaver_mcp_servers.write_server:main"
+retreaver-host = "retreaver_host.main:main"
+retreaver-telegram = "retreaver_telegram.main:main"

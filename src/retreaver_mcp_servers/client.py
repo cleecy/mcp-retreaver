@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import httpx
 from dotenv import load_dotenv
@@ -59,6 +60,22 @@ class RetreaverClient:
         return self._handle(resp)
 
     @staticmethod
+    def _parse_link_header(header: str) -> dict[str, int]:
+        """Extract page numbers from a Link header.
+
+        Example header:
+            <https://api.retreaver.com/campaigns.json?page=2&per_page=25>; rel="next",
+            <https://api.retreaver.com/campaigns.json?page=10&per_page=25>; rel="last"
+
+        Returns e.g. {"next": 2, "last": 10}
+        """
+        pagination: dict[str, int] = {}
+        for match in re.finditer(r'<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="(\w+)"', header):
+            page_num, rel = match.group(1), match.group(2)
+            pagination[rel] = int(page_num)
+        return pagination
+
+    @staticmethod
     def _handle(resp: httpx.Response) -> dict | list | str:
         if resp.status_code >= 400:
             try:
@@ -69,9 +86,17 @@ class RetreaverClient:
         if not resp.content:
             return {"ok": True, "status": resp.status_code}
         try:
-            return resp.json()
+            body = resp.json()
         except Exception:
             return resp.text
+
+        link_header = resp.headers.get("link", "")
+        if link_header and isinstance(body, list):
+            pagination = RetreaverClient._parse_link_header(link_header)
+            if pagination:
+                return {"data": body, "pagination": pagination}
+
+        return body
 
     async def close(self) -> None:
         if self._client and not self._client.is_closed:
