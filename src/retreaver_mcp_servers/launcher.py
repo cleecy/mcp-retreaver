@@ -59,7 +59,8 @@ def main() -> None:
         print("All services stopped.")
 
     signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, shutdown)
 
     print("Starting Retreaver services...")
 

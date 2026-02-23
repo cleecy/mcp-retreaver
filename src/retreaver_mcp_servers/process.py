@@ -3,12 +3,47 @@
 from __future__ import annotations
 
 import os
-import signal
 import sys
 import time
 from pathlib import Path
 
+_WIN = sys.platform == "win32"
+
 PID_DIR = Path.home() / ".retreaver"
+
+
+def _pid_exists(pid: int) -> bool:
+    """Check if a process with the given PID is alive."""
+    if _WIN:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        return False
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+
+def _terminate(pid: int) -> None:
+    """Send a termination signal to a process."""
+    if _WIN:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(1, False, pid)  # PROCESS_TERMINATE
+        if handle:
+            kernel32.TerminateProcess(handle, 1)
+            kernel32.CloseHandle(handle)
+    else:
+        import signal
+        os.kill(pid, signal.SIGTERM)
 
 
 def write_pid(name: str) -> None:
@@ -39,42 +74,28 @@ def is_running(name: str) -> bool:
     pid = read_pid(name)
     if pid is None:
         return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # Process exists but we don't own it — still "running".
-        return True
-    return True
+    return _pid_exists(pid)
 
 
 def stop_process(name: str) -> None:
-    """Send SIGTERM to the process and wait briefly for it to exit."""
+    """Terminate the process and wait briefly for it to exit."""
     pid = read_pid(name)
     if pid is None:
         print(f"{name} is not running (no PID file).")
         return
 
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+    if not _pid_exists(pid):
         print(f"{name} is not running (stale PID file, pid {pid}).")
         remove_pid(name)
         return
-    except PermissionError:
-        print(f"{name} (pid {pid}) is running but owned by another user.")
-        return
 
     print(f"Stopping {name} (pid {pid}) ...")
-    os.kill(pid, signal.SIGTERM)
+    _terminate(pid)
 
     # Wait up to 5 seconds for the process to exit.
     for _ in range(50):
         time.sleep(0.1)
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+        if not _pid_exists(pid):
             print(f"{name} stopped.")
             remove_pid(name)
             return
@@ -89,16 +110,10 @@ def status_process(name: str) -> None:
         print(f"{name} is not running (no PID file).")
         return
 
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+    if _pid_exists(pid):
+        print(f"{name} is running (pid {pid}).")
+    else:
         print(f"{name} is not running (stale PID file, pid {pid}).")
-        return
-    except PermissionError:
-        print(f"{name} is running (pid {pid}, owned by another user).")
-        return
-
-    print(f"{name} is running (pid {pid}).")
 
 
 def handle_command(name: str) -> bool:
@@ -107,9 +122,6 @@ def handle_command(name: str) -> bool:
     Returns True if a command was handled (caller should exit).
     Returns False if the process should start normally.
     """
-    # Look for a bare "stop" or "status" anywhere in argv.  This keeps it
-    # compatible with argparse — the caller's parser won't see these tokens
-    # because we intercept before parsing.
     args = sys.argv[1:]
     if "stop" in args:
         stop_process(name)
