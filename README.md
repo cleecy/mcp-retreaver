@@ -1,6 +1,5 @@
 # Retreaver MCP
 
-An AI-powered assistant for managing your [Retreaver](https://www.retreaver.com/) call-tracking account, built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 The project has four components:
 
