@@ -17,6 +17,18 @@ async def _handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if update.message is None or update.message.text is None:
         return
 
+    # Check allowlist (user IDs and/or usernames)
+    allowed_ids: set = context.bot_data.get("allowed_user_ids", set())
+    allowed_names: set = context.bot_data.get("allowed_usernames", set())
+    if (allowed_ids or allowed_names) and update.effective_user:
+        user = update.effective_user
+        id_ok = user.id in allowed_ids if allowed_ids else False
+        name_ok = (user.username or "").lower() in allowed_names if allowed_names else False
+        if not id_ok and not name_ok:
+            log.warning("Unauthorized user %s (%s)", user.id, user.username)
+            await update.message.reply_text("You are not authorized to use this bot.")
+            return
+
     ws_url: str = context.bot_data["ws_url"]
     chat_id = update.effective_chat.id  # type: ignore[union-attr]
     user_text = update.message.text.strip()
@@ -60,9 +72,11 @@ async def _handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Something went wrong. Please try again.")
 
 
-def build_app(token: str, ws_url: str):
+def build_app(token: str, ws_url: str, allowed_user_ids: set[int] | None = None, allowed_usernames: set[str] | None = None):
     """Build and return a configured Telegram Application (not yet running)."""
     app = ApplicationBuilder().token(token).build()
     app.bot_data["ws_url"] = ws_url
+    app.bot_data["allowed_user_ids"] = allowed_user_ids or set()
+    app.bot_data["allowed_usernames"] = allowed_usernames or set()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _handle_message))
     return app

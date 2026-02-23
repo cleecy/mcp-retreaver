@@ -125,6 +125,16 @@ async def edit_target(
     return await client.put(f"/targets/{target_id}.json", {"target": body})
 
 
+@mcp.tool()
+async def delete_target(target_id: int) -> dict | str:
+    """Delete a target by its internal ID.
+
+    Parameters:
+        target_id: Internal target ID to delete.
+    """
+    return await client.delete(f"/targets/{target_id}.json")
+
+
 # ---------------------------------------------------------------------------
 # Campaigns
 # ---------------------------------------------------------------------------
@@ -216,6 +226,16 @@ async def edit_campaign(
     return await client.put(f"/campaigns/cid/{cid}.json", {"campaign": body})
 
 
+@mcp.tool()
+async def delete_campaign(cid: str) -> dict | str:
+    """Delete a campaign by its CID.
+
+    Parameters:
+        cid: Campaign ID to delete.
+    """
+    return await client.delete(f"/campaigns/cid/{cid}.json")
+
+
 # ---------------------------------------------------------------------------
 # Publishers (Affiliates)
 # ---------------------------------------------------------------------------
@@ -271,6 +291,85 @@ async def edit_publisher(
     return await client.put(f"/affiliates/afid/{afid}.json", {"affiliate": body})
 
 
+@mcp.tool()
+async def delete_publisher(afid: str) -> dict | str:
+    """Delete a publisher (affiliate/source) by AFID.
+
+    Parameters:
+        afid: Publisher ID to delete.
+    """
+    return await client.delete(f"/affiliates/afid/{afid}.json")
+
+
+# ---------------------------------------------------------------------------
+# Numbers
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def create_number(
+    cid: str,
+    afid: str,
+    number_type: str = "Toll-free",
+    desired_text: str | None = None,
+    country: str | None = None,
+    sid: str | None = None,
+) -> dict:
+    """Create (provision) a new phone number.
+
+    Parameters:
+        cid: Campaign ID (user-set CID) this number belongs to. Campaign must exist first.
+        afid: Affiliate/publisher ID (AFID) this number belongs to. Will create affiliate if not found.
+        number_type: "Toll-free" or "Local" (default "Toll-free").
+        desired_text: Attempt to get a number containing this word (vanity number).
+        country: For Local numbers only, 2-character country code (default "US").
+        sid: SubID this number belongs to.
+    """
+    body: dict = {"type": number_type, "afid": afid, "cid": cid}
+    if desired_text is not None:
+        body["desired_text"] = desired_text
+    if country is not None:
+        body["country"] = country
+    if sid is not None:
+        body["sid"] = sid
+    return await client.post("/numbers.json", {"number": body})
+
+
+@mcp.tool()
+async def edit_number(
+    number_id: int,
+    afid: str | None = None,
+    cid: str | None = None,
+    sid: str | None = None,
+) -> dict:
+    """Update an existing number by its internal ID. Only pass fields you want to change.
+
+    Parameters:
+        number_id: Internal number ID.
+        afid: Reassign to a different affiliate/publisher.
+        cid: Reassign to a different campaign.
+        sid: Update the SubID.
+    """
+    body: dict = {}
+    if afid is not None:
+        body["afid"] = afid
+    if cid is not None:
+        body["cid"] = cid
+    if sid is not None:
+        body["sid"] = sid
+    return await client.put(f"/numbers/{number_id}.json", {"number": body})
+
+
+@mcp.tool()
+async def delete_number(number_id: int) -> dict | str:
+    """Delete a number by its internal ID. Number will be deprovisioned within 24 hours.
+
+    Parameters:
+        number_id: Internal number ID to delete.
+    """
+    return await client.delete(f"/numbers/{number_id}.json")
+
+
 # ---------------------------------------------------------------------------
 # RTB Postback Keys
 # ---------------------------------------------------------------------------
@@ -313,29 +412,25 @@ async def create_rtb_postback_key(
         ping_shield_outbound_count_limit: Max outbound pings for ping shield.
         ping_shield_outbound_ms_limit: Max milliseconds for ping shield.
     """
-    body: dict = {"action": "rtb"}
-    for key, val in {
-        "name": name, "tag_prefix": tag_prefix, "ttl_seconds": ttl_seconds,
-        "timeout": timeout, "inbound_number": inbound_number,
-        "claim_percent_threshold": claim_percent_threshold,
-        "blocked_inbound_percent": blocked_inbound_percent,
-        "ping_shield_outbound_count_limit": ping_shield_outbound_count_limit,
-        "ping_shield_outbound_ms_limit": ping_shield_outbound_ms_limit,
-    }.items():
-        if val is not None:
-            body[key] = val
-    # Boolean/int flags sent as 0/1
-    for key, val in {
-        "return_dba": return_dba,
-        "add_to_caps_on_status_reserved": add_to_caps_on_status_reserved,
-        "route_only_to_reserved_target": route_only_to_reserved_target,
-        "allow_no_caller_number": allow_no_caller_number,
-        "paused": paused,
-    }.items():
-        if val is not None:
-            body[key] = int(val)
+    body: dict = {
+        "action": "rtb",
+        "name": name or "",
+        "tag_prefix": tag_prefix or "",
+        "ttl_seconds": ttl_seconds if ttl_seconds is not None else 30,
+        "timeout": timeout if timeout is not None else 3.0,
+        "inbound_number": inbound_number or "",
+        "return_dba": int(return_dba) if return_dba is not None else 0,
+        "add_to_caps_on_status_reserved": int(add_to_caps_on_status_reserved) if add_to_caps_on_status_reserved is not None else 0,
+        "route_only_to_reserved_target": int(route_only_to_reserved_target) if route_only_to_reserved_target is not None else 0,
+        "allow_no_caller_number": int(allow_no_caller_number) if allow_no_caller_number is not None else 0,
+        "paused": int(paused) if paused is not None else 0,
+        "claim_percent_threshold": claim_percent_threshold if claim_percent_threshold is not None else 10,
+        "blocked_inbound_percent": blocked_inbound_percent if blocked_inbound_percent is not None else 50,
+        "ping_shield_outbound_count_limit": ping_shield_outbound_count_limit or "",
+        "ping_shield_outbound_ms_limit": ping_shield_outbound_ms_limit or "",
+    }
     return await client.post(
-        f"/campaigns/{campaign_id}/postback_keys.json", {"postback_key": body}
+        f"/campaigns/{campaign_id}/postback_keys", {"postback_key": body}
     )
 
 
@@ -353,125 +448,172 @@ async def create_webhook(
     request_method: str | None = None,
     dedupe_seconds: int | None = None,
     tag_list: str | None = None,
-    wcf_template_id: str | None = None,
-    wcf_target_id: int | None = None,
-    wcf_output_tag_prefix_field: str | None = None,
-    wcf_ping_url_field: str | None = None,
-    wcf_ping_method_field: str | None = None,
-    wcf_ping_headers_field: str | None = None,
-    wcf_ping_data_field: str | None = None,
-    wcf_ping_output_map_field: str | None = None,
-    wcf_post_condition_key_field: str | None = None,
-    wcf_post_condition_operator_field: str | None = None,
-    wcf_post_condition_value_field: str | None = None,
-    wcf_post_url_field: str | None = None,
-    wcf_post_method_field: str | None = None,
-    wcf_post_headers_field: str | None = None,
-    wcf_post_data_field: str | None = None,
-    wcf_post_output_map_field: str | None = None,
-    wcf_payout_output_tag_field: str | None = None,
-    wcf_payout_modifier_multiplier_field: str | None = None,
-    wcf_revenue_output_tag_field: str | None = None,
-    wcf_revenue_modifier_multiplier_field: str | None = None,
-    wcf_timer_offset_tag_field: str | None = None,
-    wcf_timer_offset_modifier_field: str | None = None,
-    update_buyer_tags: str | None = None,
 ) -> dict:
-    """Create a webhook (timer) on a campaign, with optional webhook configurator fields.
+    """Create a basic webhook (timer) on a campaign. Do NOT use this for RTB —
+    use create_rtb_webhook instead.
 
     Trigger types:
         9  = Call starts (fires when a call comes in)
         5  = Call converted
-        12 = Passthrough / RTB (for brokering with RTB publishers and buyers)
         13 = Data appending
 
     Parameters:
         campaign_id: Internal numeric campaign ID (not the user-set CID).
-        trigger_type: When the webhook fires (9, 5, 12, or 13).
+        trigger_type: When the webhook fires (9, 5, or 13). For RTB (12) use create_rtb_webhook.
         url: The webhook URL to call.
         name: Display name for this webhook.
         request_method: HTTP method — "get" or "post" (default "post").
         dedupe_seconds: Dedupe window in seconds (default 0).
         tag_list: Comma-separated tags to apply.
-        wcf_template_id: Webhook configurator template ID (e.g. "ringba_rtb_ping_post").
-        wcf_target_id: Target ID for the webhook configurator.
-        wcf_output_tag_prefix_field: Tag prefix for webhook configurator output tags.
-        wcf_ping_url_field: Ping URL for webhook configurator.
-        wcf_ping_method_field: Ping HTTP method (default "POST").
-        wcf_ping_headers_field: Ping headers as JSON string.
-        wcf_ping_data_field: Ping request body as JSON string.
-        wcf_ping_output_map_field: Ping output mapping as JSON string.
-        wcf_post_condition_key_field: Post condition key for conditional post-call webhook.
-        wcf_post_condition_operator_field: Post condition operator (e.g. "is_greater_than").
-        wcf_post_condition_value_field: Post condition value.
-        wcf_post_url_field: Post-call webhook URL.
-        wcf_post_method_field: Post-call HTTP method (default "POST").
-        wcf_post_headers_field: Post-call headers as JSON string.
-        wcf_post_data_field: Post-call request body as JSON string.
-        wcf_post_output_map_field: Post-call output mapping as JSON string.
-        wcf_payout_output_tag_field: Tag to read payout from.
-        wcf_payout_modifier_multiplier_field: Payout multiplier.
-        wcf_revenue_output_tag_field: Tag to read revenue from.
-        wcf_revenue_modifier_multiplier_field: Revenue multiplier.
-        wcf_timer_offset_tag_field: Tag for timer offset.
-        wcf_timer_offset_modifier_field: Timer offset modifier.
-        update_buyer_tags: Tags to update on the buyer.
     """
-    # Use "passthrough_timer" key for trigger_type 12, "start_timer" for others
-    timer_key = "passthrough_timer" if trigger_type == 12 else "start_timer"
-
     pixel: dict = {
         "_destroy": False,
         "id": "",
         "fire_order": 0,
         "request_method": request_method or "post",
         "url": url,
+        "wcf_template_id": "",
+        "wcf_target_id": "",
     }
-    if wcf_template_id is not None:
-        pixel["wcf_template_id"] = wcf_template_id
-    if wcf_target_id is not None:
-        pixel["wcf_target_id"] = wcf_target_id
 
     timer: dict = {
         "id": "",
         "_destroy": False,
         "trigger_type": trigger_type,
         "name": name or "",
-        "dedupe_seconds": dedupe_seconds or 0,
+        "dedupe_seconds": dedupe_seconds if dedupe_seconds is not None else 0,
         "tag_list": tag_list or "",
         "pixels_attributes": {"0": pixel},
     }
 
-    payload: dict = {timer_key: timer}
+    return await client.post(
+        f"/campaigns/{campaign_id}/timers", {"start_timer": timer}
+    )
 
-    # Webhook configurator fields (top-level in the request body)
-    for key, val in {
-        "wcf_output_tag_prefix_field": wcf_output_tag_prefix_field,
-        "wcf_ping_url_field": wcf_ping_url_field,
-        "wcf_ping_method_field": wcf_ping_method_field,
-        "wcf_ping_headers_field": wcf_ping_headers_field,
-        "wcf_ping_data_field": wcf_ping_data_field,
-        "wcf_ping_output_map_field": wcf_ping_output_map_field,
-        "wcf_post_condition_key_field": wcf_post_condition_key_field,
-        "wcf_post_condition_operator_field": wcf_post_condition_operator_field,
-        "wcf_post_condition_value_field": wcf_post_condition_value_field,
-        "wcf_post_url_field": wcf_post_url_field,
-        "wcf_post_method_field": wcf_post_method_field,
-        "wcf_post_headers_field": wcf_post_headers_field,
-        "wcf_post_data_field": wcf_post_data_field,
-        "wcf_post_output_map_field": wcf_post_output_map_field,
-        "wcf_payout_output_tag_field": wcf_payout_output_tag_field,
-        "wcf_payout_modifier_multiplier_field": wcf_payout_modifier_multiplier_field,
-        "wcf_revenue_output_tag_field": wcf_revenue_output_tag_field,
-        "wcf_revenue_modifier_multiplier_field": wcf_revenue_modifier_multiplier_field,
-        "wcf_timer_offset_tag_field": wcf_timer_offset_tag_field,
-        "wcf_timer_offset_modifier_field": wcf_timer_offset_modifier_field,
-        "update_buyer_tags": update_buyer_tags,
-    }.items():
-        if val is not None:
-            payload[key] = val
 
-    return await client.post(f"/campaigns/{campaign_id}/timers.json", payload)
+@mcp.tool()
+async def create_rtb_webhook(
+    campaign_id: int,
+    wcf_target_id: int,
+    wcf_template_id: str,
+    output_tag_prefix: str,
+    ping_url: str,
+    ping_method: str = "POST",
+    ping_headers: str = '{"Content-Type":"application/json"}',
+    ping_data: str = "",
+    ping_output_map: str = "",
+    name: str | None = None,
+    post_condition_key: str | None = None,
+    post_condition_operator: str | None = None,
+    post_condition_value: str | None = None,
+    post_url: str | None = None,
+    post_method: str | None = None,
+    post_headers: str | None = None,
+    post_data: str | None = None,
+    post_output_map: str | None = None,
+    payout_output_tag: str | None = None,
+    payout_modifier_multiplier: str | None = None,
+    revenue_output_tag: str | None = None,
+    revenue_modifier_multiplier: str | None = None,
+    timer_offset_tag: str | None = None,
+    timer_offset_modifier: str | None = None,
+    update_buyer_tags: str | None = None,
+) -> dict:
+    """Create an RTB passthrough webhook using the webhook configurator. Always use
+    this tool (not create_webhook) when setting up RTB integrations.
+
+    This auto-builds the webhook configurator URL from the provided fields.
+
+    Parameters:
+        campaign_id: Internal numeric campaign ID (not the user-set CID).
+        wcf_target_id: The target ID in this campaign for the RTB buyer.
+        wcf_template_id: Webhook configurator template (e.g. "ringba_rtb_ping_post").
+        output_tag_prefix: Prefix for output tags (e.g. "ringba_125879").
+        ping_url: The RTB endpoint URL to ping (e.g. "https://rtb.ringba.com/v1/production/ID.json").
+        ping_method: HTTP method for the ping (default "POST").
+        ping_headers: JSON string of headers for the ping (default '{"Content-Type":"application/json"}').
+        ping_data: JSON string of the ping request body with Retreaver tokens like [nanp_caller_number].
+        ping_output_map: JSON string mapping RTB response fields to Retreaver fields.
+        name: Display name for this webhook.
+        post_condition_key: Tag key to evaluate for the post-call webhook condition.
+        post_condition_operator: Operator for post condition (e.g. "is_greater_than").
+        post_condition_value: Value to compare against for post condition.
+        post_url: Post-call webhook URL.
+        post_method: Post-call HTTP method.
+        post_headers: Post-call headers as JSON string.
+        post_data: Post-call request body as JSON string.
+        post_output_map: Post-call output mapping as JSON string.
+        payout_output_tag: Tag to read payout from.
+        payout_modifier_multiplier: Payout multiplier.
+        revenue_output_tag: Tag to read revenue from.
+        revenue_modifier_multiplier: Revenue multiplier.
+        timer_offset_tag: Tag for timer offset.
+        timer_offset_modifier: Timer offset modifier.
+        update_buyer_tags: Tags to update on the buyer.
+    """
+    from urllib.parse import quote, urlencode
+
+    # Build the webhook configurator URL with all config encoded as query params
+    wcf_params = {
+        "call_key": "[call_key]",
+        "call_uuid": "[call_uuid]",
+        "output_tag_prefix": output_tag_prefix,
+        "ping_url": ping_url,
+        "ping_method": ping_method,
+        "ping_headers": ping_headers,
+        "ping_data": ping_data,
+        "ping_output_map": ping_output_map,
+    }
+    wcf_url = "https://retreaver.com/webhook-configurator/v1/?" + urlencode(
+        wcf_params, quote_via=quote
+    )
+
+    pixel: dict = {
+        "_destroy": False,
+        "id": "",
+        "fire_order": 0,
+        "request_method": "post",
+        "url": wcf_url,
+        "wcf_template_id": wcf_template_id,
+        "wcf_target_id": wcf_target_id,
+    }
+
+    timer: dict = {
+        "id": "",
+        "_destroy": False,
+        "trigger_type": 12,
+        "name": name or "config",
+        "dedupe_seconds": 0,
+        "tag_list": "",
+        "pixels_attributes": {"0": pixel},
+    }
+
+    payload: dict = {
+        "passthrough_timer": timer,
+        "wcf_output_tag_prefix_field": output_tag_prefix,
+        "wcf_ping_url_field": ping_url,
+        "wcf_ping_method_field": ping_method,
+        "wcf_ping_headers_field": ping_headers,
+        "wcf_ping_data_field": ping_data,
+        "wcf_ping_output_map_field": ping_output_map,
+        "wcf_post_condition_key_field": post_condition_key or "",
+        "wcf_post_condition_operator_field": post_condition_operator or "is_greater_than",
+        "wcf_post_condition_value_field": post_condition_value or "",
+        "wcf_post_url_field": post_url or "",
+        "wcf_post_method_field": post_method or "POST",
+        "wcf_post_headers_field": post_headers or "",
+        "wcf_post_data_field": post_data or "",
+        "wcf_post_output_map_field": post_output_map or "",
+        "wcf_payout_output_tag_field": payout_output_tag or "",
+        "wcf_payout_modifier_multiplier_field": payout_modifier_multiplier or "",
+        "wcf_revenue_output_tag_field": revenue_output_tag or "",
+        "wcf_revenue_modifier_multiplier_field": revenue_modifier_multiplier or "",
+        "wcf_timer_offset_tag_field": timer_offset_tag or "",
+        "wcf_timer_offset_modifier_field": timer_offset_modifier or "",
+        "update_buyer_tags": update_buyer_tags or "",
+    }
+
+    return await client.post(f"/campaigns/{campaign_id}/timers", payload)
 
 
 # ---------------------------------------------------------------------------

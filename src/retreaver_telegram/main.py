@@ -30,12 +30,24 @@ def main() -> None:
 
     ws_url = os.environ.get("WS_URL", "ws://localhost:8080")
 
+    allowed_raw = os.environ.get("TELEGRAM_ALLOWED_USERS", "")
+    allowed_user_ids: set[int] = set()
+    allowed_usernames: set[str] = set()
+    for entry in allowed_raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if entry.startswith("@"):
+            allowed_usernames.add(entry.lstrip("@").lower())
+        else:
+            allowed_user_ids.add(int(entry))
+
     write_pid(_NAME)
-    log.info("Starting Telegram bot (ws_url=%s) ...", ws_url)
+    log.info("Starting Telegram bot (ws_url=%s, allowed_ids=%s, allowed_usernames=%s) ...", ws_url, allowed_user_ids or "all", allowed_usernames or "all")
 
     from .bot import build_app
 
-    app = build_app(token, ws_url)
+    app = build_app(token, ws_url, allowed_user_ids, allowed_usernames)
     app.run_polling()
 
     from retreaver_mcp_servers.process import remove_pid

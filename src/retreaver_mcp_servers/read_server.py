@@ -74,24 +74,29 @@ async def check_call_flow(
     caller: str | None = None,
     uuid: str | None = None,
 ) -> dict | list:
-    """Check what happened during a call by looking up its call flow events.
+    """Check what happened during a SINGLE call by looking up its call flow events.
 
-    Provide either a caller ID (phone number) or a call UUID. Returns the call
-    details including call_flow_events showing routing decisions, why calls
-    didn't connect, etc.
+    Only look up ONE call at a time. If you need to check multiple calls, call this
+    tool once per call.
+
+    Provide either a caller phone number OR a single call UUID (not both).
 
     Parameters:
-        caller: Caller phone number to look up.
-        uuid: Call UUID to look up.
+        caller: A single caller phone number to look up.
+        uuid: A single call UUID to look up (e.g. "addcf985-017e-4962-be34-cf5d55e74afc").
     """
     if uuid:
+        uuid = uuid.strip()
+        if " " in uuid or "," in uuid:
+            return {"error": "Only one UUID at a time. Call this tool once per call."}
         return await client.get(
-            f"/api/v3/calls/{uuid}.json",
+            f"/api/v2/calls/{uuid}.json",
             {"call_flow_events": "true"},
         )
     if caller:
+        caller = caller.strip()
         return await client.get(
-            "/api/v3/calls.json",
+            "/api/v2/calls.json",
             {"caller": caller, "call_flow_events": "true"},
         )
     return {"error": "Provide either a caller phone number or a call UUID."}

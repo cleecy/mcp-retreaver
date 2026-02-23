@@ -24,7 +24,10 @@ class RetreaverClient:
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=30.0)
+            self._client = httpx.AsyncClient(
+                timeout=30.0,
+                headers={"Accept": "application/json"},
+            )
         return self._client
 
     def _auth_params(self) -> dict[str, str]:
