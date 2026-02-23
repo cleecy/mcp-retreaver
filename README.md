@@ -16,8 +16,9 @@ src/
   retreaver_mcp_servers/
     client.py          # Shared async HTTP client for the Retreaver API
     process.py         # PID file utilities (start/stop/status)
-    read_server.py     # MCP server — GET endpoints (27 tools)
-    write_server.py    # MCP server — POST/PUT/DELETE endpoints (48 tools)
+    launcher.py        # Single-command launcher for all services
+    read_server.py     # MCP server — GET endpoints
+    write_server.py    # MCP server — POST/PUT/DELETE endpoints
   retreaver_host/
     model_interface.py # LLM provider abstraction (Anthropic, OpenAI, Google)
     orchestrator.py    # Agentic tool-use chat loop
@@ -75,6 +76,7 @@ Plus one of the following, depending on which LLM provider you use:
 | `WS_HOST` | `0.0.0.0` | WebSocket server bind address |
 | `WS_PORT` | `8080` | WebSocket server port |
 | `TELEGRAM_BOT_TOKEN` | *(required for bot)* | Telegram bot token from @BotFather |
+| `TELEGRAM_ALLOWED_USERS` | *(empty = all)* | Comma-separated allowlist of Telegram user IDs and/or @usernames |
 | `WS_URL` | `ws://localhost:8080` | WebSocket endpoint the Telegram bot connects to |
 
 ### Example `.env` file
@@ -87,9 +89,19 @@ ANTHROPIC_API_KEY=your-anthropic-api-key
 
 ## Running
 
-You need all three processes running. Start each in a separate terminal (or use a process manager). The sequence below matters.
+### Quick start (recommended)
 
-### 1. Start the read server
+```bash
+retreaver
+```
+
+This launches the read server, write server, and host together in one command. Use `retreaver stop` to shut everything down and `retreaver status` to check.
+
+### Manual start
+
+Alternatively, start each process in a separate terminal. The sequence matters.
+
+#### 1. Start the read server
 
 ```bash
 retreaver-read
@@ -97,7 +109,7 @@ retreaver-read
 
 Listens on port 8001 by default. Override with `--port` and `--host`.
 
-### 2. Start the write server
+#### 2. Start the write server
 
 ```bash
 retreaver-write
@@ -105,7 +117,7 @@ retreaver-write
 
 Listens on port 8002 by default.
 
-### 3. Start the host
+#### 3. Start the host
 
 ```bash
 retreaver-host
@@ -223,7 +235,7 @@ LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini retreaver-host
                      |
                 orchestrator.py  <-- agentic tool-use loop
                    /    \
-              llm.py    ClientSessionGroup
+        model_interface.py    ClientSessionGroup
              (LLM API)    /          \
                    read_server    write_server
                        \            /
@@ -235,7 +247,7 @@ The orchestrator runs a loop for each user message:
 1. Send the conversation + available tools to the LLM
 2. If the LLM returns tool calls, execute them via MCP
 3. Feed the results back to the LLM
-4. Repeat until the LLM responds with plain text (max 10 rounds)
+4. Repeat until the LLM responds with plain text (max 15 rounds)
 
 Tool routing is automatic — the `ClientSessionGroup` aggregates tools from both servers and dispatches `call_tool()` to whichever server owns the tool.
 
